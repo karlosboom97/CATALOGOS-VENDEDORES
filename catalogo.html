@@ -38,9 +38,9 @@
 
 <div id="v-admin" class="hidden max-w-5xl mx-auto p-4 space-y-5">
 <div class="bg-white p-5 rounded-3xl border">
-<h2 class="font-bold text-lg">Mi cuenta (Usuario y Contraseña)</h2>
-<p class="text-xs text-gray-500 mb-3">Podés actualizar tu nombre de usuario/ID o tu clave cuando quieras.</p>
-<div class="grid grid-cols-1 md:grid-cols-2 gap-2 mb-3">
+<h2 class="font-bold text-lg">Mi cuenta (Usuario, Contraseña y WhatsApp)</h2>
+<p class="text-xs text-gray-500 mb-3">Podés actualizar tu nombre de usuario/ID, tu contraseña o tu número de teléfono/WhatsApp cuando quieras.</p>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-2 mb-3">
   <div>
     <label class="text-xs text-gray-600 block mb-1">Nombre de usuario / ID</label>
     <input id="edit-user" placeholder="Tu usuario" class="w-full border rounded-xl p-2 text-sm">
@@ -49,8 +49,12 @@
     <label class="text-xs text-gray-600 block mb-1">Nueva contraseña / clave</label>
     <input id="edit-pass" type="text" placeholder="Tu clave" class="w-full border rounded-xl p-2 text-sm">
   </div>
+  <div>
+    <label class="text-xs text-gray-600 block mb-1">Teléfono / WhatsApp (ej: 59899123456)</label>
+    <input id="edit-wsp" type="text" placeholder="59899123456" class="w-full border rounded-xl p-2 text-sm">
+  </div>
 </div>
-<button id="btn-guardar-cuenta" onclick="guardarCuenta()" class="bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl px-4 py-2.5 font-bold text-sm">Guardar usuario y contraseña</button>
+<button id="btn-guardar-cuenta" onclick="guardarCuenta()" class="bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl px-4 py-2.5 font-bold text-sm">Guardar cuenta</button>
 </div>
 
 <div class="bg-white p-5 rounded-3xl border">
@@ -152,6 +156,7 @@ async function cargarDatosVendedor() {
 
     document.getElementById('edit-user').value = vend.id || vendedorId;
     document.getElementById('edit-pass').value = vendedorClaveActual;
+    document.getElementById('edit-wsp').value = vendedorWsp;
     if (vend.vence_en) {
       const f = new Date(vend.vence_en).toLocaleDateString('es-UY');
       document.getElementById('info-vence').innerText = `Suscripción vence: ${f}${vencido ? ' (VENCIDA)' : ''}`;
@@ -190,9 +195,10 @@ async function guardarCuenta() {
   if (esModoClientePublico) return;
   const nuevoId = document.getElementById('edit-user').value.trim().toLowerCase().replace(/\s+/g, '-');
   const nuevaClave = document.getElementById('edit-pass').value.trim();
+  const nuevoWsp = document.getElementById('edit-wsp').value.replace(/\D/g, '');
 
-  if (!nuevoId || !nuevaClave) {
-    return alert('Completá el nombre de usuario y la contraseña.');
+  if (!nuevoId || !nuevaClave || !nuevoWsp) {
+    return alert('Completá el nombre de usuario, la contraseña y el número de WhatsApp.');
   }
 
   const btn = document.getElementById('btn-guardar-cuenta');
@@ -208,7 +214,7 @@ async function guardarCuenta() {
 
     if (existe) {
       btn.disabled = false;
-      btn.innerText = 'Guardar usuario y contraseña';
+      btn.innerText = 'Guardar cuenta';
       return alert('Ese nombre de usuario ya está en uso. Elegí otro.');
     }
 
@@ -217,14 +223,14 @@ async function guardarCuenta() {
       .insert([{
         id: nuevoId,
         nombre: vendedorNombre,
-        whatsapp: vendedorWsp,
+        whatsapp: nuevoWsp,
         clave: nuevaClave,
         activo: !catalogoEnPausa
       }]);
 
     if (errInsert) {
       btn.disabled = false;
-      btn.innerText = 'Guardar usuario y contraseña';
+      btn.innerText = 'Guardar cuenta';
       return alert('Error al crear nuevo usuario: ' + errInsert.message);
     }
 
@@ -242,17 +248,18 @@ async function guardarCuenta() {
   } else {
     const { error: errUpd } = await supabaseClient
       .from('vendedores')
-      .update({ clave: nuevaClave })
+      .update({ clave: nuevaClave, whatsapp: nuevoWsp })
       .eq('id', vendedorId);
 
     if (errUpd) {
       btn.disabled = false;
-      btn.innerText = 'Guardar usuario y contraseña';
-      return alert('Error al guardar contraseña: ' + errUpd.message);
+      btn.innerText = 'Guardar cuenta';
+      return alert('Error al guardar cambios: ' + errUpd.message);
     }
   }
 
   vendedorClaveActual = nuevaClave;
+  vendedorWsp = nuevoWsp;
   sessionStorage.setItem('vendedor_sesion', JSON.stringify({
     id: vendedorId,
     nombre: vendedorNombre,
@@ -260,9 +267,9 @@ async function guardarCuenta() {
   }));
 
   btn.disabled = false;
-  btn.innerText = 'Guardar usuario y contraseña';
+  btn.innerText = 'Guardar cuenta';
   aplicarDatosVendedor();
-  alert('Usuario y contraseña actualizados correctamente.');
+  alert('Datos de cuenta y WhatsApp actualizados correctamente.');
 }
 
 function copiarLinkCliente() {
