@@ -121,13 +121,9 @@
 
     function mostrarPanelSiLogueado() {
       const esAdmin = sessionStorage.getItem('admin_auth') === '1';
-      const vendedorGuardado = sessionStorage.getItem('vendedor_sesion');
-
-      if (vendedorGuardado && !esAdmin) {
-        window.location.href = 'catalogo.html';
-        return;
+      if (!esAdmin) {
+        sessionStorage.removeItem('vendedor_sesion');
       }
-
       document.getElementById('loginBox').classList.toggle('hidden', esAdmin);
       document.getElementById('adminPanel').classList.toggle('hidden', !esAdmin);
       if (esAdmin) cargarVendedores();
