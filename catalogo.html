@@ -70,7 +70,21 @@
 </div>
 </div>
 
-<div id="modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-end justify-center"><div class="bg-white w-full max-w-md rounded-t-3xl p-5"><div class="flex justify-between items-center mb-3"><b class="text-base">Tu pedido</b><button onclick="cerrar()" class="px-2 py-1 text-sm font-bold">✕</button></div><div id="items"></div><button onclick="wsp()" class="w-full bg-[#25D366] text-white rounded-2xl py-3 mt-4 font-bold">Enviar pedido por WhatsApp</button></div></div>
+<div id="modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-end justify-center">
+  <div class="bg-white w-full max-w-md rounded-t-3xl p-5 max-h-[90vh] overflow-y-auto">
+    <div class="flex justify-between items-center mb-3">
+      <b class="text-base">Tu pedido</b>
+      <button onclick="cerrar()" class="px-2 py-1 text-sm font-bold">✕</button>
+    </div>
+    <div id="items"></div>
+    <div class="mt-3 space-y-2">
+      <input id="cli-nombre" placeholder="Tu nombre (opcional)" class="w-full border rounded-xl p-2.5 text-sm">
+      <input id="cli-direccion" placeholder="Dirección de entrega (calle, número, esquina o apto)" class="w-full border rounded-xl p-2.5 text-sm">
+      <textarea id="cli-info" rows="2" placeholder="Indicaciones extra (ej: llamar cuando estés en la dirección, tocar timbre, etc.)" class="w-full border rounded-xl p-2.5 text-sm"></textarea>
+    </div>
+    <button onclick="wsp()" class="w-full bg-[#25D366] text-white rounded-2xl py-3 mt-4 font-bold">Enviar pedido por WhatsApp</button>
+  </div>
+</div>
 
 <script>
 const supabaseClient = window.supabase.createClient(
@@ -435,6 +449,15 @@ function cerrar() {
 function wsp() {
   if (catalogoEnPausa) return alert('Este catálogo está en pausa.');
   if (!cart.length) return alert('Agregá al menos un producto al pedido.');
+
+  const cliNombre = (document.getElementById('cli-nombre')?.value || '').trim();
+  const cliDireccion = (document.getElementById('cli-direccion')?.value || '').trim();
+  const cliInfo = (document.getElementById('cli-info')?.value || '').trim();
+
+  if (!cliDireccion) {
+    return alert('Por favor ingresá la dirección de entrega.');
+  }
+
   let t = 0;
   let m = `Hola *${vendedorNombre}*! Quiero hacer este pedido:%0A%0A`;
   cart.forEach(c => {
@@ -444,7 +467,11 @@ function wsp() {
     t += sub;
     m += `• ${p.nombre} (x${c.qty}) — $${sub}%0A`;
   });
-  m += `%0A*Total: $${t}*`;
+  m += `%0A*Total: $${t}*%0A`;
+  if (cliNombre) m += `%0ACliente: ${cliNombre}`;
+  m += `%0ADirección: ${cliDireccion}`;
+  if (cliInfo) m += `%0AIndicaciones: ${cliInfo}`;
+
   window.open(`https://wa.me/${vendedorWsp}?text=${m}`, '_blank');
 }
 
