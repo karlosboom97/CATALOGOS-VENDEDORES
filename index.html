@@ -3,36 +3,36 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Panel Admin - Gestión de Vendedores</title>
+  <title>Acceso - Gestión y Catálogos</title>
   <script src="https://cdn.tailwindcss.com"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body class="bg-slate-950 text-slate-100 min-h-screen">
 
-  <!-- PANTALLA DE LOGIN -->
+  <!-- PANTALLA DE LOGIN UNIFICADA -->
   <div id="loginBox" class="min-h-screen flex items-center justify-center p-4">
     <div class="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl">
       <div class="mb-5">
-        <span class="text-xs uppercase tracking-wider text-emerald-400 font-bold">Acceso Administrador</span>
+        <span class="text-xs uppercase tracking-wider text-emerald-400 font-bold">Acceso al Sistema</span>
         <h1 class="text-2xl font-black mt-1">Iniciar sesión</h1>
-        <p class="text-xs text-slate-400 mt-1">Ingresá tus credenciales para administrar vendedores.</p>
+        <p class="text-xs text-slate-400 mt-1">Ingresá con tu cuenta de administrador o tu ID y clave de vendedor.</p>
       </div>
 
       <form id="loginForm" class="space-y-3">
         <div>
-          <label class="text-xs text-slate-300 block mb-1">Usuario</label>
-          <input id="loginUser" type="text" required placeholder="admin"
+          <label class="text-xs text-slate-300 block mb-1">Usuario o ID de vendedor</label>
+          <input id="loginUser" type="text" required placeholder="ej: admin o yusdier"
             class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400">
         </div>
         <div>
-          <label class="text-xs text-slate-300 block mb-1">Contraseña</label>
+          <label class="text-xs text-slate-300 block mb-1">Contraseña / Clave</label>
           <input id="loginPass" type="password" required placeholder="••••••••"
             class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400">
         </div>
         <p id="loginError" class="text-xs text-rose-400 hidden"></p>
-        <button type="submit"
+        <button id="loginBtn" type="submit"
           class="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black py-2.5 rounded-xl text-sm transition">
-          Entrar al panel
+          Ingresar
         </button>
       </form>
     </div>
@@ -111,7 +111,6 @@
   </div>
 
   <script>
-    // Cambiá estos dos valores por tu usuario y contraseña de admin:
     const ADMIN_USER = 'admin';
     const ADMIN_PASS = '1234';
 
@@ -121,29 +120,81 @@
     );
 
     function mostrarPanelSiLogueado() {
-      const ok = sessionStorage.getItem('admin_auth') === '1';
-      document.getElementById('loginBox').classList.toggle('hidden', ok);
-      document.getElementById('adminPanel').classList.toggle('hidden', !ok);
-      if (ok) cargarVendedores();
+      const esAdmin = sessionStorage.getItem('admin_auth') === '1';
+      const vendedorGuardado = sessionStorage.getItem('vendedor_sesion');
+
+      if (vendedorGuardado && !esAdmin) {
+        window.location.href = 'catalogo.html';
+        return;
+      }
+
+      document.getElementById('loginBox').classList.toggle('hidden', esAdmin);
+      document.getElementById('adminPanel').classList.toggle('hidden', !esAdmin);
+      if (esAdmin) cargarVendedores();
     }
 
-    document.getElementById('loginForm').addEventListener('submit', (e) => {
+    document.getElementById('loginForm').addEventListener('submit', async (e) => {
       e.preventDefault();
       const u = document.getElementById('loginUser').value.trim();
-      const p = document.getElementById('loginPass').value;
+      const p = document.getElementById('loginPass').value.trim();
       const err = document.getElementById('loginError');
+      const btn = document.getElementById('loginBtn');
+
+      err.classList.add('hidden');
+      err.textContent = '';
+
+      // 1) Verifica acceso de administrador
       if (u === ADMIN_USER && p === ADMIN_PASS) {
+        sessionStorage.removeItem('vendedor_sesion');
         sessionStorage.setItem('admin_auth', '1');
-        err.classList.add('hidden');
         mostrarPanelSiLogueado();
-      } else {
+        return;
+      }
+
+      // 2) Verifica acceso de vendedor en Supabase
+      btn.disabled = true;
+      btn.textContent = 'Verificando...';
+
+      const idBuscado = u.toLowerCase().replace(/\s+/g, '-');
+      const { data, error } = await supabaseClient
+        .from('vendedores')
+        .select('*')
+        .eq('id', idBuscado)
+        .maybeSingle();
+
+      btn.disabled = false;
+      btn.textContent = 'Ingresar';
+
+      if (error) {
+        err.textContent = 'Error al consultar la base: ' + error.message;
+        err.classList.remove('hidden');
+        return;
+      }
+
+      if (!data || String(data.clave || '') !== p) {
         err.textContent = 'Usuario o contraseña incorrectos.';
         err.classList.remove('hidden');
+        return;
       }
+
+      if (data.activo === false) {
+        err.textContent = 'Tu cuenta está suspendida. Consultá con el administrador.';
+        err.classList.remove('hidden');
+        return;
+      }
+
+      sessionStorage.removeItem('admin_auth');
+      sessionStorage.setItem('vendedor_sesion', JSON.stringify({
+        id: data.id,
+        nombre: data.nombre || data.id,
+        whatsapp: data.whatsapp || '59899414428'
+      }));
+      window.location.href = 'catalogo.html';
     });
 
     function cerrarSesion() {
       sessionStorage.removeItem('admin_auth');
+      sessionStorage.removeItem('vendedor_sesion');
       mostrarPanelSiLogueado();
     }
 
@@ -158,7 +209,6 @@
       const clave = document.getElementById('vClave').value.trim();
       const activo = document.getElementById('vActivo').checked;
 
-      // Intenta guardar incluyendo 'clave'; si tu tabla aún no tiene esa columna, reintenta sin 'clave'
       let res = await supabaseClient.from('vendedores').insert([{ id, nombre, whatsapp, clave, activo }]);
       if (res.error && res.error.message.includes('clave')) {
         res = await supabaseClient.from('vendedores').insert([{ id, nombre, whatsapp, activo }]);
