@@ -43,7 +43,7 @@
     <div class="flex flex-wrap justify-between items-center gap-3 bg-slate-900 border border-slate-800 rounded-3xl p-4 md:p-5 mb-6">
       <div>
         <h1 class="text-xl md:text-2xl font-black">Centro de Control - Vendedores</h1>
-        <p class="text-xs text-slate-400">Creá cuentas, asigná accesos y controlá quién está activo.</p>
+        <p class="text-xs text-slate-400">Creá cuentas, controlá suscripciones mensuales y pausá catálogos vencidos sin borrar datos.</p>
       </div>
       <button onclick="cerrarSesion()"
         class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold px-4 py-2 rounded-xl border border-slate-700">
@@ -55,7 +55,7 @@
       <!-- FORMULARIO CREAR VENDEDOR -->
       <div class="bg-slate-900 border border-slate-800 rounded-3xl p-5 h-fit">
         <h2 class="font-black text-base mb-1">Crear nuevo vendedor</h2>
-        <p class="text-xs text-slate-400 mb-4">Se guarda directo en tu base de datos de Supabase.</p>
+        <p class="text-xs text-slate-400 mb-4">Se crea con 30 días de suscripción activa desde hoy.</p>
 
         <form id="createForm" class="space-y-3">
           <div>
@@ -84,7 +84,7 @@
 
           <div class="flex items-center gap-2 pt-1">
             <input id="vActivo" type="checkbox" checked class="rounded">
-            <label for="vActivo" class="text-xs text-slate-300">Activar cuenta inmediatamente</label>
+            <label for="vActivo" class="text-xs text-slate-300">Activar cuenta inmediatamente (30 días)</label>
           </div>
 
           <p id="createMsg" class="text-xs hidden"></p>
@@ -119,6 +119,24 @@
       'sb_publishable_C7Tf8n553yR4Fem9kzWdSQ_Y_UXu7-j'
     );
 
+    function estaVencido(v) {
+      if (!v.vence_en) return false;
+      return new Date(v.vence_en).getTime() < Date.now();
+    }
+
+    function estaHabilitado(v) {
+      if (v.activo === false) return false;
+      if (estaVencido(v)) return false;
+      return true;
+    }
+
+    function formatoFecha(iso) {
+      if (!iso) return 'Sin fecha';
+      const d = new Date(iso);
+      if (isNaN(d.getTime())) return 'Sin fecha';
+      return d.toLocaleDateString('es-UY');
+    }
+
     function mostrarPanelSiLogueado() {
       const esAdmin = sessionStorage.getItem('admin_auth') === '1';
       if (!esAdmin) {
@@ -139,7 +157,6 @@
       err.classList.add('hidden');
       err.textContent = '';
 
-      // 1) Verifica acceso de administrador
       if (u === ADMIN_USER && p === ADMIN_PASS) {
         sessionStorage.removeItem('vendedor_sesion');
         sessionStorage.setItem('admin_auth', '1');
@@ -147,7 +164,6 @@
         return;
       }
 
-      // 2) Verifica acceso de vendedor en Supabase
       btn.disabled = true;
       btn.textContent = 'Verificando...';
 
@@ -169,12 +185,6 @@
 
       if (!data || String(data.clave || '') !== p) {
         err.textContent = 'Usuario o contraseña incorrectos.';
-        err.classList.remove('hidden');
-        return;
-      }
-
-      if (data.activo === false) {
-        err.textContent = 'Tu cuenta está suspendida. Consultá con el administrador.';
         err.classList.remove('hidden');
         return;
       }
@@ -204,10 +214,11 @@
       const whatsapp = document.getElementById('vWsp').value.trim();
       const clave = document.getElementById('vClave').value.trim();
       const activo = document.getElementById('vActivo').checked;
+      const vence_en = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
 
-      let res = await supabaseClient.from('vendedores').insert([{ id, nombre, whatsapp, clave, activo }]);
-      if (res.error && res.error.message.includes('clave')) {
-        res = await supabaseClient.from('vendedores').insert([{ id, nombre, whatsapp, activo }]);
+      let res = await supabaseClient.from('vendedores').insert([{ id, nombre, whatsapp, clave, activo, vence_en }]);
+      if (res.error) {
+        res = await supabaseClient.from('vendedores').insert([{ id, nombre, whatsapp, clave, activo }]);
       }
 
       if (res.error) {
@@ -216,7 +227,7 @@
         return;
       }
 
-      msg.textContent = `Vendedor "${nombre}" (${id}) creado correctamente.`;
+      msg.textContent = `Vendedor "${nombre}" (${id}) creado con 30 días de suscripción.`;
       msg.classList.add('text-emerald-400');
       e.target.reset();
       document.getElementById('vActivo').checked = true;
@@ -238,29 +249,40 @@
         return;
       }
 
-      box.innerHTML = data.map(v => `
+      box.innerHTML = data.map(v => {
+        const habilitado = estaHabilitado(v);
+        const vencido = estaVencido(v);
+        const estadoTexto = habilitado ? 'ACTIVO' : (vencido ? 'VENCIDO / EN PAUSA' : 'EN PAUSA');
+        const badgeClass = habilitado ? 'bg-emerald-500/20 text-emerald-300' : 'bg-amber-500/20 text-amber-300';
+
+        return `
         <div class="bg-slate-800/70 border border-slate-700/80 rounded-2xl p-4 flex flex-wrap justify-between items-center gap-3">
           <div>
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-2 flex-wrap">
               <b class="text-sm text-white">${v.nombre}</b>
-              <span class="text-[11px] px-2 py-0.5 rounded-full font-bold ${v.activo ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'}">
-                ${v.activo ? 'ACTIVO' : 'SUSPENDIDO'}
+              <span class="text-[11px] px-2 py-0.5 rounded-full font-bold ${badgeClass}">
+                ${estadoTexto}
               </span>
             </div>
             <p class="text-xs text-slate-400 mt-1">
-              ID: <span class="text-slate-200">${v.id}</span> · WhatsApp: <span class="text-slate-200">${v.whatsapp || '-'}</span>
+              Usuario: <span class="text-slate-200">${v.id}</span> · WhatsApp: <span class="text-slate-200">${v.whatsapp || '-'}</span>
               ${v.clave ? `· Clave: <span class="text-slate-200">${v.clave}</span>` : ''}
+              · Vence: <span class="text-slate-200">${formatoFecha(v.vence_en)}</span>
             </p>
           </div>
 
-          <div class="flex items-center gap-2">
+          <div class="flex items-center gap-2 flex-wrap">
+            <button onclick="renovarMes('${v.id}', '${v.vence_en || ''}')"
+              class="bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-black px-3 py-2 rounded-xl transition">
+              +30 días (Pagó)
+            </button>
             <button onclick="cambiarClave('${v.id}', '${String(v.clave || '').replace(/'/g, "\\'")}')"
               class="bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-bold px-3 py-2 rounded-xl transition">
               Cambiar clave
             </button>
-            <button onclick="cambiarEstado('${v.id}', ${!v.activo})"
-              class="${v.activo ? 'bg-rose-500 hover:bg-rose-400 text-white' : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950'} text-xs font-black px-3.5 py-2 rounded-xl transition">
-              ${v.activo ? 'SUSPENDER' : 'ACTIVAR'}
+            <button onclick="cambiarEstado('${v.id}', ${!habilitado})"
+              class="${habilitado ? 'bg-rose-500 hover:bg-rose-400 text-white' : 'bg-sky-500 hover:bg-sky-400 text-slate-950'} text-xs font-black px-3 py-2 rounded-xl transition">
+              ${habilitado ? 'PAUSAR' : 'ACTIVAR'}
             </button>
             <button onclick="eliminarVendedor('${v.id}')"
               class="bg-slate-700 hover:bg-rose-600 text-slate-200 hover:text-white text-xs font-bold px-3 py-2 rounded-xl transition">
@@ -268,7 +290,24 @@
             </button>
           </div>
         </div>
-      `).join('');
+      `;
+      }).join('');
+    }
+
+    async function renovarMes(id, venceActual) {
+      const baseMs = venceActual && new Date(venceActual).getTime() > Date.now()
+        ? new Date(venceActual).getTime()
+        : Date.now();
+      const nuevoVence = new Date(baseMs + 30 * 24 * 60 * 60 * 1000).toISOString();
+
+      const { error } = await supabaseClient
+        .from('vendedores')
+        .update({ activo: true, vence_en: nuevoVence })
+        .eq('id', id);
+
+      if (error) return alert('Error al renovar suscripción: ' + error.message);
+      alert('Suscripción renovada por +30 días y catálogo activado.');
+      cargarVendedores();
     }
 
     async function cambiarClave(id, claveActual) {
