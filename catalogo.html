@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Catálogo</title>
 <script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>body{font-family:sans-serif}</style>
 </head>
 <body class="bg-gray-50">
@@ -31,37 +32,43 @@
 <div id="v-admin" class="hidden max-w-5xl mx-auto p-4">
 <div class="bg-white p-5 rounded-3xl border">
 <h2 class="font-bold text-lg">Crear / Cargar productos del catálogo</h2>
-<p class="text-xs text-gray-500 mb-3">Cargá foto, nombre y precio. Después compartí tu enlace a tus clientes.</p>
+<p class="text-xs text-gray-500 mb-3">Cargá foto, nombre y precio. Queda guardado en la nube para tus clientes.</p>
 <input id="n" placeholder="Nombre Ej: Skip 800ml" class="w-full border rounded-xl p-2 mb-2 text-sm">
 <input id="p" type="number" placeholder="Precio Ej: 189" class="w-full border rounded-xl p-2 mb-2 text-sm">
 <select id="c" class="w-full border rounded-xl p-2 mb-2 text-sm"><option value="limpieza">Limpieza</option><option value="comida">Comida</option><option value="higiene">Higiene</option></select>
 <input id="foto" type="file" accept="image/*" class="w-full text-sm mb-3">
-<button onclick="agregar()" class="w-full bg-black text-white rounded-xl py-3 font-bold text-sm">+ Agregar producto</button>
+<button id="btn-agregar" onclick="agregar()" class="w-full bg-black text-white rounded-xl py-3 font-bold text-sm">+ Agregar producto</button>
 <div id="lista-admin" class="mt-6"></div>
 </div></div>
 
 <div id="modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-end justify-center"><div class="bg-white w-full max-w-md rounded-t-3xl p-5"><div class="flex justify-between items-center mb-3"><b class="text-base">Tu pedido</b><button onclick="cerrar()" class="px-2 py-1 text-sm font-bold">✕</button></div><div id="items"></div><button onclick="wsp()" class="w-full bg-[#25D366] text-white rounded-2xl py-3 mt-4 font-bold">Enviar pedido por WhatsApp</button></div></div>
 
 <script>
+const supabaseClient = window.supabase.createClient(
+  'https://ssrbtstsognusylmiusw.supabase.co',
+  'sb_publishable_C7Tf8n553yR4Fem9kzWdSQ_Y_UXu7-j'
+);
+
 const params = new URLSearchParams(window.location.search);
 const vendedorUrlId = (params.get('v') || '').trim().toLowerCase();
 const sesionVendedor = JSON.parse(sessionStorage.getItem('vendedor_sesion') || 'null');
 
-// Si entra un comprador con ?v=id, no exige login de vendedor
 if (!vendedorUrlId && (!sesionVendedor || !sesionVendedor.id)) {
   window.location.replace('index.html');
 }
 
 const esModoClientePublico = Boolean(vendedorUrlId);
 const vendedorId = vendedorUrlId || sesionVendedor?.id || 'default';
-const vendedorNombre = sesionVendedor?.nombre || (vendedorUrlId ? `Catálogo ${vendedorUrlId}` : 'Catálogo');
-const vendedorWsp = (sesionVendedor?.whatsapp || '59899414428').replace(/\D/g, '');
-const storageKey = `prods_${vendedorId}`;
+let vendedorNombre = sesionVendedor?.nombre || (vendedorUrlId ? `Catálogo ${vendedorUrlId}` : 'Catálogo');
+let vendedorWsp = (sesionVendedor?.whatsapp || '59899414428').replace(/\D/g, '');
 const urlCliente = `${window.location.origin}${window.location.pathname}?v=${encodeURIComponent(vendedorId)}`;
 
-document.getElementById('titulo-vendedor').innerText = vendedorNombre;
-document.getElementById('badge-vendedor').innerText = (vendedorNombre.trim()[0] || 'V').toUpperCase();
-document.title = `${vendedorNombre} - Catálogo`;
+function aplicarDatosVendedor() {
+  document.getElementById('titulo-vendedor').innerText = vendedorNombre;
+  document.getElementById('badge-vendedor').innerText = (vendedorNombre.trim()[0] || 'V').toUpperCase();
+  document.title = `${vendedorNombre} - Catálogo`;
+}
+aplicarDatosVendedor();
 
 if (esModoClientePublico) {
   document.getElementById('btn-panel').classList.add('hidden');
@@ -71,7 +78,7 @@ if (esModoClientePublico) {
   document.getElementById('link-cliente').innerText = urlCliente;
 }
 
-let prods = JSON.parse(localStorage.getItem(storageKey) || '[]');
+let prods = [];
 let cart = [];
 let foto64 = '';
 
@@ -79,9 +86,52 @@ document.getElementById('foto').addEventListener('change', e => {
   const file = e.target.files[0];
   if (!file) return;
   const r = new FileReader();
-  r.onload = () => foto64 = r.result;
+  r.onload = () => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const maxW = 700;
+      const scale = Math.min(1, maxW / img.width);
+      canvas.width = img.width * scale;
+      canvas.height = img.height * scale;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      foto64 = canvas.toDataURL('image/jpeg', 0.75);
+    };
+    img.src = r.result;
+  };
   r.readAsDataURL(file);
 });
+
+async function cargarDatosVendedor() {
+  if (esModoClientePublico) {
+    const { data: vend } = await supabaseClient
+      .from('vendedores')
+      .select('nombre, whatsapp')
+      .eq('id', vendedorId)
+      .maybeSingle();
+    if (vend) {
+      if (vend.nombre) vendedorNombre = vend.nombre;
+      if (vend.whatsapp) vendedorWsp = String(vend.whatsapp).replace(/\D/g, '');
+      aplicarDatosVendedor();
+    }
+  }
+
+  document.getElementById('grid').innerHTML = '<p class="text-sm text-gray-500 col-span-full">Cargando catálogo...</p>';
+  const { data, error } = await supabaseClient
+    .from('productos')
+    .select('*')
+    .eq('vendedor_id', vendedorId)
+    .order('id', { ascending: false });
+
+  if (error) {
+    document.getElementById('grid').innerHTML = `<p class="text-sm text-rose-600 col-span-full">Error al cargar productos: ${error.message}</p>`;
+    return;
+  }
+
+  prods = data || [];
+  pintar();
+}
 
 function copiarLinkCliente() {
   navigator.clipboard?.writeText(urlCliente);
@@ -94,19 +144,31 @@ function salirVendedor() {
   window.location.replace('index.html');
 }
 
-function agregar() {
+async function agregar() {
   if (esModoClientePublico) return;
   const nombre = document.getElementById('n').value.trim();
   const precio = parseInt(document.getElementById('p').value, 10);
   const cat = document.getElementById('c').value;
   if (!nombre || !precio || !foto64) return alert('Falta nombre, precio y foto');
-  prods.unshift({ id: Date.now(), nombre, precio, categoria: cat, foto: foto64 });
-  localStorage.setItem(storageKey, JSON.stringify(prods));
+
+  const btn = document.getElementById('btn-agregar');
+  btn.disabled = true;
+  btn.innerText = 'Guardando...';
+
+  const { error } = await supabaseClient
+    .from('productos')
+    .insert([{ vendedor_id: vendedorId, nombre, precio, categoria: cat, foto: foto64 }]);
+
+  btn.disabled = false;
+  btn.innerText = '+ Agregar producto';
+
+  if (error) return alert('Error al guardar producto: ' + error.message);
+
   document.getElementById('n').value = '';
   document.getElementById('p').value = '';
   document.getElementById('foto').value = '';
   foto64 = '';
-  pintar();
+  await cargarDatosVendedor();
   vista('cliente');
 }
 
@@ -161,11 +223,11 @@ function cambiarCant(id, delta) {
   verCarrito();
 }
 
-function del(id) {
+async function del(id) {
   if (esModoClientePublico) return;
-  prods = prods.filter(p => p.id != id);
-  localStorage.setItem(storageKey, JSON.stringify(prods));
-  pintar();
+  const { error } = await supabaseClient.from('productos').delete().eq('id', id).eq('vendedor_id', vendedorId);
+  if (error) return alert('Error al borrar: ' + error.message);
+  await cargarDatosVendedor();
 }
 
 function vista(v) {
@@ -221,7 +283,7 @@ function wsp() {
   window.open(`https://wa.me/${vendedorWsp}?text=${m}`, '_blank');
 }
 
-pintar();
+cargarDatosVendedor();
 </script>
 </body>
 </html>
