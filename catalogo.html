@@ -3,14 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Limpieza Martín - Catálogo</title>
+<title>Catálogo</title>
 <script src="https://cdn.tailwindcss.com"></script>
 <style>body{font-family:sans-serif}</style>
 </head>
 <body class="bg-gray-50">
 <div class="bg-white border-b sticky top-0 z-20">
 <div class="max-w-5xl mx-auto px-4 py-3 flex justify-between">
-<div class="flex gap-3 items-center"><div class="w-10 h-10 bg-emerald-500 rounded-full flex items-center justify-center text-white font-black">M</div><b>Limpieza Martín</b></div>
+<div class="flex gap-3 items-center"><div id="badge-vendedor" class="w-10 h-10 bg-emerald-500 rounded-full flex items-center justify-center text-white font-black">V</div><b id="titulo-vendedor">Catálogo</b></div>
 <div class="flex gap-2"><button onclick="vista('cliente')" class="px-3 py-1.5 bg-black text-white rounded-full text-sm">Cliente</button><button onclick="vista('admin')" class="px-3 py-1.5 bg-gray-100 rounded-full text-sm">Panel</button><button onclick="verCarrito()" class="px-3 py-1.5 bg-emerald-500 text-white rounded-full text-sm">🛒 <span id="count">0</span></button></div>
 </div></div>
 
@@ -35,14 +35,24 @@
 <div id="modal" class="hidden fixed inset-0 bg-black/50 z-50 flex items-end justify-center"><div class="bg-white w-full max-w-md rounded-t-3xl p-5"><div class="flex justify-between"><b>Pedido</b><button onclick="cerrar()">x</button></div><div id="items"></div><button onclick="wsp()" class="w-full bg-[#25D366] text-white rounded-2xl py-3 mt-4 font-bold">Enviar por WhatsApp</button></div></div>
 
 <script>
-let prods = JSON.parse(localStorage.getItem('prods')||'[]');
+const sesionVendedor = JSON.parse(sessionStorage.getItem('vendedor_sesion') || 'null');
+const vendedorId = sesionVendedor?.id || 'default';
+const vendedorNombre = sesionVendedor?.nombre || 'Catálogo';
+const vendedorWsp = (sesionVendedor?.whatsapp || '59899414428').replace(/\D/g, '');
+const storageKey = `prods_${vendedorId}`;
+
+document.getElementById('titulo-vendedor').innerText = vendedorNombre;
+document.getElementById('badge-vendedor').innerText = (vendedorNombre.trim()[0] || 'V').toUpperCase();
+document.title = `${vendedorNombre} - Catálogo`;
+
+let prods = JSON.parse(localStorage.getItem(storageKey) || '[]');
 let cart = []; let foto64='';
 document.getElementById('foto').addEventListener('change', e=>{ let r=new FileReader(); r.onload=()=>foto64=r.result; r.readAsDataURL(e.target.files[0]); });
 
 function agregar(){
 let nombre=document.getElementById('n').value; let precio=parseInt(document.getElementById('p').value); let cat=document.getElementById('c').value;
 if(!nombre||!precio||!foto64) return alert('Falta nombre, precio y foto');
-prods.unshift({id:Date.now(),nombre,precio,categoria:cat,foto:foto64}); localStorage.setItem('prods',JSON.stringify(prods));
+prods.unshift({id:Date.now(),nombre,precio,categoria:cat,foto:foto64}); localStorage.setItem(storageKey,JSON.stringify(prods));
 document.getElementById('n').value=''; document.getElementById('p').value=''; document.getElementById('foto').value=''; foto64=''; pintar();
 }
 function pintar(){
@@ -52,11 +62,11 @@ g.innerHTML=f.map(p=>`<div class="bg-white rounded-3xl border p-3"><img src="${p
 document.getElementById('lista-admin').innerHTML=prods.map(p=>`<div class="flex justify-between border-b py-2 text-sm"><span>${p.nombre} $${p.precio}</span><button onclick="del(${p.id})" class="text-red-500">Borrar</button></div>`).join('');
 }
 function add(id){ let it=cart.find(c=>c.id==id); if(it) it.qty++; else cart.push({id,qty:1}); document.getElementById('count').innerText=cart.reduce((a,b)=>a+b.qty,0); }
-function del(id){ prods=prods.filter(p=>p.id!=id); localStorage.setItem('prods',JSON.stringify(prods)); pintar(); }
+function del(id){ prods=prods.filter(p=>p.id!=id); localStorage.setItem(storageKey,JSON.stringify(prods)); pintar(); }
 function vista(v){ document.getElementById('v-cliente').classList.toggle('hidden',v!='cliente'); document.getElementById('v-admin').classList.toggle('hidden',v!='admin'); }
 function verCarrito(){ document.getElementById('modal').classList.remove('hidden'); let t=0; let html=''; cart.forEach(c=>{let p=prods.find(x=>x.id==c.id); t+=p.precio*c.qty; html+=`<div class="flex justify-between py-2 border-b text-sm"><span>${p.nombre} x${c.qty}</span><b>$${p.precio*c.qty}</b></div>`;}); html+=`<div class="flex justify-between font-black pt-2"><span>Total</span><span>$${t}</span></div>`; document.getElementById('items').innerHTML=html||'Vacío'; }
 function cerrar(){document.getElementById('modal').classList.add('hidden');}
-function wsp(){ let t=0; let m='Hola! Quiero:%0A'; cart.forEach(c=>{let p=prods.find(x=>x.id==c.id); m+=`- ${p.nombre} x${c.qty} $${p.precio*c.qty}%0A`; t+=p.precio*c.qty;}); m+=`Total $${t}`; window.open('https://wa.me/59899414428?text='+m,'_blank'); }
+function wsp(){ let t=0; let m='Hola! Quiero:%0A'; cart.forEach(c=>{let p=prods.find(x=>x.id==c.id); m+=`- ${p.nombre} x${c.qty} $${p.precio*c.qty}%0A`; t+=p.precio*c.qty;}); m+=`Total $${t}`; window.open(`https://wa.me/${vendedorWsp}?text=${m}`,'_blank'); }
 pintar();
 </script>
 </body>
