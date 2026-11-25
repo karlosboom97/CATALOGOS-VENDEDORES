@@ -208,6 +208,10 @@
           </div>
 
           <div class="flex items-center gap-2">
+            <button onclick="cambiarClave('${v.id}', '${String(v.clave || '').replace(/'/g, "\\'")}')"
+              class="bg-amber-500/20 hover:bg-amber-500/30 text-amber-300 border border-amber-500/40 text-xs font-bold px-3 py-2 rounded-xl transition">
+              Cambiar clave
+            </button>
             <button onclick="cambiarEstado('${v.id}', ${!v.activo})"
               class="${v.activo ? 'bg-rose-500 hover:bg-rose-400 text-white' : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950'} text-xs font-black px-3.5 py-2 rounded-xl transition">
               ${v.activo ? 'SUSPENDER' : 'ACTIVAR'}
@@ -219,6 +223,30 @@
           </div>
         </div>
       `).join('');
+    }
+
+    async function cambiarClave(id, claveActual) {
+      const nuevaClave = prompt(`Nueva contraseña para el vendedor "${id}":`, claveActual);
+      if (nuevaClave === null) return;
+
+      const limpia = nuevaClave.trim();
+      if (!limpia) {
+        alert('La contraseña no puede quedar vacía.');
+        return;
+      }
+
+      const { error } = await supabaseClient
+        .from('vendedores')
+        .update({ clave: limpia })
+        .eq('id', id);
+
+      if (error) {
+        alert(`Error al actualizar la clave: ${error.message}`);
+        return;
+      }
+
+      alert('Contraseña actualizada correctamente.');
+      cargarVendedores();
     }
 
     async function cambiarEstado(id, nuevoEstado) {
