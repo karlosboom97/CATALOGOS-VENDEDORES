@@ -13,6 +13,7 @@
 <div class="max-w-5xl mx-auto px-4 py-3 flex justify-between items-center gap-2 flex-wrap">
 <div class="flex gap-3 items-center"><div id="badge-vendedor" class="w-10 h-10 bg-emerald-500 rounded-full flex items-center justify-center text-white font-black">V</div><b id="titulo-vendedor">Catálogo</b></div>
 <div class="flex gap-2 flex-wrap items-center">
+<button id="btn-atras" onclick="irAtras()" class="px-3 py-1.5 bg-gray-200 hover:bg-gray-300 text-gray-900 rounded-full text-sm font-semibold">← Atrás</button>
 <button id="btn-ver" onclick="vista('cliente')" class="px-3 py-1.5 bg-black text-white rounded-full text-sm">Ver catálogo</button>
 <button id="btn-panel" onclick="vista('admin')" class="px-3 py-1.5 bg-emerald-100 text-emerald-900 font-semibold rounded-full text-sm">Crear / Editar catálogo</button>
 <button id="btn-carrito" onclick="verCarrito()" class="px-3 py-1.5 bg-emerald-500 text-white rounded-full text-sm font-bold">🛒 <span id="count">0</span> · $<span id="total-top">0</span></button>
@@ -106,6 +107,19 @@ let vendedorNombre = sesionVendedor?.nombre || (vendedorUrlId ? `Catálogo ${ven
 let vendedorWsp = (sesionVendedor?.whatsapp || '59899414428').replace(/\D/g, '');
 let vendedorClaveActual = '';
 let catalogoEnPausa = false;
+
+function irAtras() {
+  const enAdmin = !document.getElementById('v-admin').classList.contains('hidden');
+  if (enAdmin) {
+    vista('cliente');
+    return;
+  }
+  if (window.history.length > 1) {
+    window.history.back();
+  } else {
+    window.location.href = 'index.html';
+  }
+}
 
 function actualizarUrlCliente() {
   const urlCliente = `${window.location.origin}${window.location.pathname}?v=${encodeURIComponent(vendedorId)}`;
