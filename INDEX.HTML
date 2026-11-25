@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Panel Admin - Gestión de Vendedores</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen">
+
+  <!-- PANTALLA DE LOGIN -->
+  <div id="loginBox" class="min-h-screen flex items-center justify-center p-4">
+    <div class="w-full max-w-sm bg-slate-900 border border-slate-800 rounded-3xl p-6 shadow-xl">
+      <div class="mb-5">
+        <span class="text-xs uppercase tracking-wider text-emerald-400 font-bold">Acceso Administrador</span>
+        <h1 class="text-2xl font-black mt-1">Iniciar sesión</h1>
+        <p class="text-xs text-slate-400 mt-1">Ingresá tus credenciales para administrar vendedores.</p>
+      </div>
+
+      <form id="loginForm" class="space-y-3">
+        <div>
+          <label class="text-xs text-slate-300 block mb-1">Usuario</label>
+          <input id="loginUser" type="text" required placeholder="admin"
+            class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400">
+        </div>
+        <div>
+          <label class="text-xs text-slate-300 block mb-1">Contraseña</label>
+          <input id="loginPass" type="password" required placeholder="••••••••"
+            class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:border-emerald-400">
+        </div>
+        <p id="loginError" class="text-xs text-rose-400 hidden"></p>
+        <button type="submit"
+          class="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black py-2.5 rounded-xl text-sm transition">
+          Entrar al panel
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- PANEL PRINCIPAL ADMIN -->
+  <div id="adminPanel" class="hidden max-w-6xl mx-auto p-4 md:p-6">
+    <div class="flex flex-wrap justify-between items-center gap-3 bg-slate-900 border border-slate-800 rounded-3xl p-4 md:p-5 mb-6">
+      <div>
+        <h1 class="text-xl md:text-2xl font-black">Centro de Control - Vendedores</h1>
+        <p class="text-xs text-slate-400">Creá cuentas, asigná accesos y controlá quién está activo.</p>
+      </div>
+      <button onclick="cerrarSesion()"
+        class="bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold px-4 py-2 rounded-xl border border-slate-700">
+        Cerrar sesión
+      </button>
+    </div>
+
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+      <!-- FORMULARIO CREAR VENDEDOR -->
+      <div class="bg-slate-900 border border-slate-800 rounded-3xl p-5 h-fit">
+        <h2 class="font-black text-base mb-1">Crear nuevo vendedor</h2>
+        <p class="text-xs text-slate-400 mb-4">Se guarda directo en tu base de datos de Supabase.</p>
+
+        <form id="createForm" class="space-y-3">
+          <div>
+            <label class="text-xs text-slate-300 block mb-1">ID / Usuario del catálogo (sin espacios)</label>
+            <input id="vId" type="text" required placeholder="ej: limpieza-carlos"
+              class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm">
+          </div>
+
+          <div>
+            <label class="text-xs text-slate-300 block mb-1">Nombre del negocio o vendedor</label>
+            <input id="vNombre" type="text" required placeholder="ej: Limpieza Carlos"
+              class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm">
+          </div>
+
+          <div>
+            <label class="text-xs text-slate-300 block mb-1">WhatsApp (código país + número)</label>
+            <input id="vWsp" type="text" required placeholder="ej: 59899123456"
+              class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm">
+          </div>
+
+          <div>
+            <label class="text-xs text-slate-300 block mb-1">Clave / PIN del vendedor</label>
+            <input id="vClave" type="text" required placeholder="ej: 1234"
+              class="w-full bg-slate-800 border border-slate-700 rounded-xl px-3 py-2 text-sm">
+          </div>
+
+          <div class="flex items-center gap-2 pt-1">
+            <input id="vActivo" type="checkbox" checked class="rounded">
+            <label for="vActivo" class="text-xs text-slate-300">Activar cuenta inmediatamente</label>
+          </div>
+
+          <p id="createMsg" class="text-xs hidden"></p>
+
+          <button type="submit"
+            class="w-full bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black py-2.5 rounded-xl text-sm transition">
+            + Guardar vendedor
+          </button>
+        </form>
+      </div>
+
+      <!-- LISTADO DE VENDEDORES -->
+      <div class="lg:col-span-2 bg-slate-900 border border-slate-800 rounded-3xl p-5">
+        <div class="flex justify-between items-center mb-4">
+          <h2 class="font-black text-base">Vendedores registrados</h2>
+          <button onclick="cargarVendedores()"
+            class="text-xs bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-xl border border-slate-700">
+            Actualizar
+          </button>
+        </div>
+        <div id="listaVendedores" class="space-y-3"></div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Cambiá estos dos valores por tu usuario y contraseña de admin:
+    const ADMIN_USER = 'admin';
+    const ADMIN_PASS = '1234';
+
+    const supabaseClient = window.supabase.createClient(
+      'https://ssrbtstsognusylmiusw.supabase.co',
+      'sb_publishable_C7Tf8n553yR4Fem9kzWdSQ_Y_UXu7-j'
+    );
+
+    function mostrarPanelSiLogueado() {
+      const ok = sessionStorage.getItem('admin_auth') === '1';
+      document.getElementById('loginBox').classList.toggle('hidden', ok);
+      document.getElementById('adminPanel').classList.toggle('hidden', !ok);
+      if (ok) cargarVendedores();
+    }
+
+    document.getElementById('loginForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const u = document.getElementById('loginUser').value.trim();
+      const p = document.getElementById('loginPass').value;
+      const err = document.getElementById('loginError');
+      if (u === ADMIN_USER && p === ADMIN_PASS) {
+        sessionStorage.setItem('admin_auth', '1');
+        err.classList.add('hidden');
+        mostrarPanelSiLogueado();
+      } else {
+        err.textContent = 'Usuario o contraseña incorrectos.';
+        err.classList.remove('hidden');
+      }
+    });
+
+    function cerrarSesion() {
+      sessionStorage.removeItem('admin_auth');
+      mostrarPanelSiLogueado();
+    }
+
+    document.getElementById('createForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const msg = document.getElementById('createMsg');
+      msg.classList.remove('hidden', 'text-emerald-400', 'text-rose-400');
+
+      const id = document.getElementById('vId').value.trim().toLowerCase().replace(/\s+/g, '-');
+      const nombre = document.getElementById('vNombre').value.trim();
+      const whatsapp = document.getElementById('vWsp').value.trim();
+      const clave = document.getElementById('vClave').value.trim();
+      const activo = document.getElementById('vActivo').checked;
+
+      // Intenta guardar incluyendo 'clave'; si tu tabla aún no tiene esa columna, reintenta sin 'clave'
+      let res = await supabaseClient.from('vendedores').insert([{ id, nombre, whatsapp, clave, activo }]);
+      if (res.error && res.error.message.includes('clave')) {
+        res = await supabaseClient.from('vendedores').insert([{ id, nombre, whatsapp, activo }]);
+      }
+
+      if (res.error) {
+        msg.textContent = 'Error al crear: ' + res.error.message;
+        msg.classList.add('text-rose-400');
+        return;
+      }
+
+      msg.textContent = `Vendedor "${nombre}" (${id}) creado correctamente.`;
+      msg.classList.add('text-emerald-400');
+      e.target.reset();
+      document.getElementById('vActivo').checked = true;
+      cargarVendedores();
+    });
+
+    async function cargarVendedores() {
+      const box = document.getElementById('listaVendedores');
+      box.innerHTML = '<p class="text-xs text-slate-400">Cargando vendedores...</p>';
+
+      const { data, error } = await supabaseClient.from('vendedores').select('*');
+      if (error) {
+        box.innerHTML = `<p class="text-xs text-rose-400">Error: ${error.message}</p>`;
+        return;
+      }
+
+      if (!data || !data.length) {
+        box.innerHTML = '<p class="text-xs text-slate-400">Todavía no hay vendedores cargados.</p>';
+        return;
+      }
+
+      box.innerHTML = data.map(v => `
+        <div class="bg-slate-800/70 border border-slate-700/80 rounded-2xl p-4 flex flex-wrap justify-between items-center gap-3">
+          <div>
+            <div class="flex items-center gap-2">
+              <b class="text-sm text-white">${v.nombre}</b>
+              <span class="text-[11px] px-2 py-0.5 rounded-full font-bold ${v.activo ? 'bg-emerald-500/20 text-emerald-300' : 'bg-rose-500/20 text-rose-300'}">
+                ${v.activo ? 'ACTIVO' : 'SUSPENDIDO'}
+              </span>
+            </div>
+            <p class="text-xs text-slate-400 mt-1">
+              ID: <span class="text-slate-200">${v.id}</span> · WhatsApp: <span class="text-slate-200">${v.whatsapp || '-'}</span>
+              ${v.clave ? `· Clave: <span class="text-slate-200">${v.clave}</span>` : ''}
+            </p>
+          </div>
+
+          <div class="flex items-center gap-2">
+            <button onclick="cambiarEstado('${v.id}', ${!v.activo})"
+              class="${v.activo ? 'bg-rose-500 hover:bg-rose-400 text-white' : 'bg-emerald-500 hover:bg-emerald-400 text-slate-950'} text-xs font-black px-3.5 py-2 rounded-xl transition">
+              ${v.activo ? 'SUSPENDER' : 'ACTIVAR'}
+            </button>
+            <button onclick="eliminarVendedor('${v.id}')"
+              class="bg-slate-700 hover:bg-rose-600 text-slate-200 hover:text-white text-xs font-bold px-3 py-2 rounded-xl transition">
+              Borrar
+            </button>
+          </div>
+        </div>
+      `).join('');
+    }
+
+    async function cambiarEstado(id, nuevoEstado) {
+      await supabaseClient.from('vendedores').update({ activo: nuevoEstado }).eq('id', id);
+      cargarVendedores();
+    }
+
+    async function eliminarVendedor(id) {
+      if (!confirm(`¿Seguro que querés eliminar al vendedor "${id}"?`)) return;
+      await supabaseClient.from('vendedores').delete().eq('id', id);
+      cargarVendedores();
+    }
+
+    mostrarPanelSiLogueado();
+  </script>
+</body>
+</html>
