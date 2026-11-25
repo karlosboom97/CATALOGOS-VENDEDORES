@@ -25,15 +25,16 @@
 <div class="text-xs text-emerald-950"><b>Enlace para tus clientes:</b> <span id="link-cliente" class="underline break-all"></span></div>
 <button onclick="copiarLinkCliente()" class="bg-emerald-600 text-white text-xs font-bold px-3 py-1.5 rounded-xl">Copiar enlace</button>
 </div>
-<input id="busc" oninput="pintar()" placeholder="Buscar producto..." class="w-full p-3 rounded-2xl border bg-white">
+<input id="busc" oninput="pintar()" placeholder="Buscar producto o sabor/aroma..." class="w-full p-3 rounded-2xl border bg-white">
 <div id="grid" class="grid grid-cols-2 md:grid-cols-4 gap-3 mt-4"></div>
 </div>
 
 <div id="v-admin" class="hidden max-w-5xl mx-auto p-4">
 <div class="bg-white p-5 rounded-3xl border">
 <h2 class="font-bold text-lg">Crear / Cargar productos del catálogo</h2>
-<p class="text-xs text-gray-500 mb-3">Cargá foto, nombre y precio. Queda guardado en la nube para tus clientes.</p>
-<input id="n" placeholder="Nombre Ej: Skip 800ml" class="w-full border rounded-xl p-2 mb-2 text-sm">
+<p class="text-xs text-gray-500 mb-3">Cargá foto, nombre y precio. Si tiene varios sabores o aromas, separalos por coma.</p>
+<input id="n" placeholder="Nombre Ej: Head & Shoulders" class="w-full border rounded-xl p-2 mb-2 text-sm">
+<input id="v" placeholder="Sabores / Aromas / Variantes (opcional, ej: Menta, Coco, Manzana)" class="w-full border rounded-xl p-2 mb-2 text-sm">
 <input id="p" type="number" placeholder="Precio Ej: 189" class="w-full border rounded-xl p-2 mb-2 text-sm">
 <select id="c" class="w-full border rounded-xl p-2 mb-2 text-sm"><option value="limpieza">Limpieza</option><option value="comida">Comida</option><option value="higiene">Higiene</option></select>
 <input id="foto" type="file" accept="image/*" class="w-full text-sm mb-3">
@@ -146,18 +147,37 @@ function salirVendedor() {
 
 async function agregar() {
   if (esModoClientePublico) return;
-  const nombre = document.getElementById('n').value.trim();
+  const nombreBase = document.getElementById('n').value.trim();
+  const variantesRaw = document.getElementById('v').value.trim();
   const precio = parseInt(document.getElementById('p').value, 10);
   const cat = document.getElementById('c').value;
-  if (!nombre || !precio || !foto64) return alert('Falta nombre, precio y foto');
+  if (!nombreBase || !precio || !foto64) return alert('Falta nombre, precio y foto');
+
+  const variantes = variantesRaw
+    ? variantesRaw.split(',').map(s => s.trim()).filter(Boolean)
+    : [];
+
+  const filas = variantes.length
+    ? variantes.map(op => ({
+        vendedor_id: vendedorId,
+        nombre: `${nombreBase} [${op}]`,
+        precio,
+        categoria: cat,
+        foto: foto64
+      }))
+    : [{
+        vendedor_id: vendedorId,
+        nombre: nombreBase,
+        precio,
+        categoria: cat,
+        foto: foto64
+      }];
 
   const btn = document.getElementById('btn-agregar');
   btn.disabled = true;
   btn.innerText = 'Guardando...';
 
-  const { error } = await supabaseClient
-    .from('productos')
-    .insert([{ vendedor_id: vendedorId, nombre, precio, categoria: cat, foto: foto64 }]);
+  const { error } = await supabaseClient.from('productos').insert(filas);
 
   btn.disabled = false;
   btn.innerText = '+ Agregar producto';
@@ -165,6 +185,7 @@ async function agregar() {
   if (error) return alert('Error al guardar producto: ' + error.message);
 
   document.getElementById('n').value = '';
+  document.getElementById('v').value = '';
   document.getElementById('p').value = '';
   document.getElementById('foto').value = '';
   foto64 = '';
